@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>__PLATFORM__ – Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="/app.css"></head><body><div class="w">
+<div class="top"><div><a class="logo" href="/admin" style="margin-bottom:10px"><svg viewBox="0 0 32 32"><ellipse cx="16" cy="16" rx="13" ry="11" fill="none" stroke="var(--mark)" stroke-width="3" stroke-linecap="round" transform="rotate(-8 16 16)"/><circle cx="16" cy="16" r="3" fill="currentColor"/></svg>__PLATFORM__</a><h1 id="h"></h1></div><div class="row"><span class="m" id="who"></span><button class="btn g" id="lo">Log out</button></div></div>
+<div class="card ban" id="ban" hidden></div>
+<div id="app" hidden><div class="row" style="margin-top:18px"><input id="cn" placeholder="Client name, e.g. Smith family" aria-label="Client name"><button class="btn" id="mk">Create gallery</button></div><div id="list"></div></div>
+<script>
+var $=function(i){return document.getElementById(i)},ME;
+function api(u,o){return fetch(u,o).then(function(r){if(r.status===401){location="/";throw 0}return r.json().then(function(j){if(!r.ok)throw j;return j})})}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function fail(e){if(e&&e.error)alert(e.error)}
+function go(u){api(u,{method:"POST"}).then(function(j){location=j.url}).catch(fail)}
+function me(){return api("/api/me").then(function(m){ME=m;$("h").textContent=m.studio;$("who").textContent=m.email;$("app").hidden=false;var b=$("ban"),t="";
+ if(m.owner)t='<b>Owner account</b> · free, no subscription needed.';
+ else if(m.status==="active")t='<div class="row"><b>Subscription active</b><button class="btn g" id="pt">Manage billing</button></div>';
+ else if(m.status==="trial"&&m.active)t='<div class="row"><b>Free trial: '+m.daysLeft+' day'+(m.daysLeft===1?"":"s")+' left</b>'+(m.billing?'<button class="btn" id="sb">Subscribe</button>':'')+'</div>';
+ else t='<div class="row"><b>Your subscription is not active.</b> Your clients cannot see their galleries and you cannot upload.'+(m.billing?'<button class="btn" id="sb">Subscribe</button>':'')+(m.hasCustomer?'<button class="btn g" id="pt">Manage billing</button>':'')+'</div>';
+ t+='<div class="m" style="margin-top:8px;font-size:14px">Storage: '+m.usedGB+' of '+m.limitGB+' GB used</div><div class="meter"><i style="width:'+Math.min(100,m.usedGB/m.limitGB*100)+'%"></i></div>';b.innerHTML=t;b.hidden=false;
+ if($("sb"))$("sb").onclick=function(){go("/api/billing/checkout")};if($("pt"))$("pt").onclick=function(){go("/api/billing/portal")}})}
+function load(){api("/api/galleries").then(function(l){
+ $("list").innerHTML=l.map(function(g){var url=location.origin+"/g/"+g.token;return '<div class="card" data-t="'+g.token+'"><div class="row"><b>'+esc(g.client)+'</b><span class="tag'+(g.status==="submitted"?" s":"")+'">'+(g.status==="submitted"?"Picks sent":"Waiting")+'</span><span class="m">'+g.count+' photos · '+g.picks+' picked</span></div>'+
+ '<div class="row" style="margin-top:10px"><input readonly value="'+url+'" style="flex:1;min-width:200px" aria-label="Gallery link"><button class="btn g cp" data-u="'+url+'">Copy link</button></div>'+
+ '<div class="row" style="margin-top:10px"><label class="btn g">Add photos<input type="file" accept="image/*" multiple hidden class="up"></label><button class="btn g vw">View picks</button>'+(g.status==="submitted"?'<button class="btn g ro">Reopen for client</button>':'')+'<button class="btn d dl">Delete</button><span class="m prog"></span></div><div class="out"></div></div>'}).join("")||'<p class="m">No galleries yet. Enter a client name and create one.</p>'}).catch(function(){})}
+$("lo").onclick=function(){fetch("/api/logout",{method:"POST"}).then(function(){location="/"})};
+$("mk").onclick=function(){var n=$("cn").value.trim();if(!n)return;api("/api/galleries",{method:"POST",body:JSON.stringify({client:n})}).then(function(){$("cn").value="";load()}).catch(fail)};
+$("list").addEventListener("click",function(e){var c=e.target.closest(".card");if(!c)return;var t=c.dataset.t,b=e.target;
+ if(b.classList.contains("cp")){navigator.clipboard.writeText(b.dataset.u);b.textContent="Copied"}
+ if(b.classList.contains("dl")&&confirm("Delete this gallery and all its photos?"))api("/api/galleries/"+t,{method:"DELETE"}).then(function(){load();me()});
+ if(b.classList.contains("ro"))api("/api/galleries/"+t+"/reopen",{method:"POST"}).then(load);
+ if(b.classList.contains("vw"))api("/api/galleries/"+t).then(function(g){var P=g.photos.filter(function(p){return g.picks.indexOf(p.id)>-1});
+  c.querySelector(".out").innerHTML='<p style="margin:14px 0 4px"><b>'+P.length+' picks</b>'+(g.name?' from '+esc(g.name):'')+'</p>'+(g.note?'<p class="m" style="margin:0">Note: '+esc(g.note)+'</p>':'')+
+  '<p style="margin:6px 0"><button class="btn g cf">Copy file names</button></p><div class="th">'+P.map(function(p){return '<figure><img src="/p/'+t+'/'+p.id+'" alt=""><a href="/o/'+t+'/'+p.id+'">Original</a> '+esc(p.name)+'</figure>'}).join("")+'</div>';
+  c.querySelector(".cf").onclick=function(){navigator.clipboard.writeText(P.map(function(p){return p.name}).join("\n"));this.textContent="Copied"}});
+});
+$("list").addEventListener("change",async function(e){if(!e.target.classList.contains("up"))return;var c=e.target.closest(".card"),t=c.dataset.t,F=[].slice.call(e.target.files),pr=c.querySelector(".prog");
+ for(var i=0;i<F.length;i++){pr.textContent="Uploading "+(i+1)+" of "+F.length+"…";var r=await fetch("/api/galleries/"+t+"/photos?name="+encodeURIComponent(F[i].name),{method:"POST",body:F[i]});
+  if(!r.ok){var j=await r.json();alert(F[i].name+": "+(j.error||"upload failed"));if(r.status!==400)break}}
+ load();me()});
+me().then(load).catch(function(){});if(location.search.indexOf("paid=1")>-1)setTimeout(me,3000);
+</script></div></body></html>

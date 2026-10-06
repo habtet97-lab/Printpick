@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Your photos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap"><link rel="stylesheet" href="/app.css"></head><body class="gv">
+<header><div class="by" id="by"></div><h1 id="t"></h1><p id="sub">Tap a photo to see it larger. Circle the ones you want printed, then press Send my picks.</p></header>
+<div class="bar"><div><span id="count"></span><button class="btn" id="send" disabled>Send my picks</button></div></div>
+<main id="grid"></main>
+<div class="lb" id="lb" role="dialog" aria-modal="true"><div class="box" id="box"></div>
+<div class="lbbar"><button class="btn ghost" id="prev">Previous</button><button class="btn s" id="ls"></button><button class="btn ghost" id="next">Next</button><button class="btn ghost" id="x">Close</button></div></div>
+<dialog id="dlg"><h2 style="margin:0 0 6px">Send your picks</h2><p id="sum" style="color:var(--mute);margin:0 0 12px"></p>
+<label>Your name<input id="name" autocomplete="name"></label>
+<label>Notes (sizes, crops, paper)<textarea id="note" rows="3"></textarea></label>
+<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost" id="cancel">Cancel</button><button class="btn" id="go">Send</button></div></dialog>
+<script>
+var T=location.pathname.split("/").pop(),G,sel={},cur=0,timer,$=function(i){return document.getElementById(i)};
+var CIRC='<svg class="circle" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="48" ry="47" transform="rotate(-6 50 50)" vector-effect="non-scaling-stroke"/></svg>';
+function wm(){return ""}
+fetch("/api/galleries/"+T).then(function(r){if(!r.ok){document.querySelector("main").remove();document.querySelector(".bar").remove();document.getElementById("sub").remove();document.getElementById("t").textContent="This gallery is not available right now";var d=document.createElement("p");d.style.cssText="max-width:56ch;margin:0 auto;padding:0 20px;color:var(--mute)";d.textContent="Please contact your photographer.";document.body.appendChild(d);throw 0}return r.json()}).then(function(g){G=g;document.title=g.client;$("t").textContent=g.client;$("by").textContent="Photos by "+(g.studio||"");g.picks.forEach(function(i){sel[i]=1});
+  if(g.status==="submitted"){$("grid").remove();document.querySelector(".bar").remove();$("sub").remove();var d=document.createElement("div");d.className="done";d.innerHTML="<h2>Thank you!</h2><p>Your "+g.picks.length+" picks were sent. We will be in touch about printing.</p>";document.body.appendChild(d);return}
+  render()});
+function render(){$("grid").innerHTML=G.photos.map(function(p,i){var on=sel[p.id];return '<div class="ph'+(on?" sel":"")+'" data-i="'+i+'"><img src="/p/'+T+'/'+p.id+'" alt="Photo '+(i+1)+'" draggable="false" loading="lazy">'+wm()+CIRC+'<button class="pick" aria-pressed="'+!!on+'">'+(on?"Selected":"Select")+'</button></div>'}).join("");upd()}
+function upd(){var n=Object.keys(sel).length;$("count").textContent=n+(n===1?" photo selected":" photos selected");$("send").disabled=!n}
+function persist(){clearTimeout(timer);timer=setTimeout(function(){fetch("/api/galleries/"+T+"/picks",{method:"POST",body:JSON.stringify({picks:Object.keys(sel)})})},500)}
+function toggle(i){var id=G.photos[i].id;if(sel[id])delete sel[id];else sel[id]=1;var d=$("grid").children[i];d.classList.toggle("sel",!!sel[id]);var b=d.querySelector(".pick");b.textContent=sel[id]?"Selected":"Select";b.setAttribute("aria-pressed",!!sel[id]);upd();persist();if($("lb").classList.contains("open"))lb(cur)}
+$("grid").addEventListener("click",function(e){var d=e.target.closest(".ph");if(!d)return;var i=+d.dataset.i;e.target.closest(".pick")?toggle(i):lb(i)});
+function lb(i){cur=(i+G.photos.length)%G.photos.length;var p=G.photos[cur],on=!!sel[p.id];$("box").innerHTML='<img src="/p/'+T+'/'+p.id+'" draggable="false">'+wm()+CIRC;$("lb").classList.toggle("sel",on);$("box").classList.toggle("sel",on);$("ls").textContent=on?"Selected – tap to undo":"Select for print";$("lb").classList.add("open")}
+$("ls").onclick=function(){toggle(cur)};$("prev").onclick=function(){lb(cur-1)};$("next").onclick=function(){lb(cur+1)};$("x").onclick=function(){$("lb").classList.remove("open")};
+$("send").onclick=function(){$("sum").textContent=Object.keys(sel).length+" photos selected.";$("dlg").showModal()};$("cancel").onclick=function(){$("dlg").close()};
+$("go").onclick=function(){$("go").disabled=true;fetch("/api/galleries/"+T+"/picks",{method:"POST",body:JSON.stringify({picks:Object.keys(sel),submit:true,name:$("name").value,note:$("note").value})}).then(function(){location.reload()})};
+document.addEventListener("contextmenu",function(e){e.preventDefault()});document.addEventListener("dragstart",function(e){e.preventDefault()});
+document.addEventListener("keydown",function(e){var k=e.key;if(k==="Escape")$("lb").classList.remove("open");if($("lb").classList.contains("open")){if(k==="ArrowRight")lb(cur+1);if(k==="ArrowLeft")lb(cur-1)}
+ if(k==="PrintScreen"){document.body.classList.add("shield");setTimeout(function(){document.body.classList.remove("shield")},1500)}if((e.ctrlKey||e.metaKey)&&"spu".indexOf(k.toLowerCase())>-1)e.preventDefault()});
+window.addEventListener("blur",function(){document.body.classList.add("shield")});window.addEventListener("focus",function(){document.body.classList.remove("shield")});
+</script></body></html>
